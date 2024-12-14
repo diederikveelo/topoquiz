@@ -1,0 +1,17 @@
+{
+  "files": {
+    "main.css": "/topoquiz/static/css/main.7382c835.css",
+    "main.js": "/topoquiz/static/js/main.3fc8830e.js",
+    "static/js/488.1a6b4c51.chunk.js": "/topoquiz/static/js/488.1a6b4c51.chunk.js",
+    "static/media/correct.mp3": "/topoquiz/static/media/correct.7590b689a680bd3f54ea.mp3",
+    "static/media/incorrect.mp3": "/topoquiz/static/media/incorrect.db58c5aded16d0972886.mp3",
+    "index.html": "/topoquiz/index.html",
+    "main.7382c835.css.map": "/topoquiz/static/css/main.7382c835.css.map",
+    "main.3fc8830e.js.map": "/topoquiz/static/js/main.3fc8830e.js.map",
+    "488.1a6b4c51.chunk.js.map": "/topoquiz/static/js/488.1a6b4c51.chunk.js.map"
+  },
+  "entrypoints": [
+    "static/css/main.7382c835.css",
+    "static/js/main.3fc8830e.js"
+  ]
+}
