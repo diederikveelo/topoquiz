@@ -1,8 +1,8 @@
 {
-  "name": "geoquiz",
+  "name": "topoquiz",
   "version": "0.1.0",
   "private": true,
-  "homepage": "https://diederikveelo.github.io/geoquiz",
+  "homepage": "https://diederikveelo.github.io/topoquiz",
   "dependencies": {
     "axios": "^1.7.9",
     "cra-template": "1.2.0",
