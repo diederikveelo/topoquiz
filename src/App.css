@@ -139,7 +139,7 @@
 }
 
 .score-board span {
-    white-space: nowrap;
+    display: inline-block;
 }
 
 .back-button {
