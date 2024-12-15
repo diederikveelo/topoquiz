@@ -397,7 +397,7 @@ function Game() {
                 <>
                     <div className="score-board">
                       <button className="back-button" onClick={handleBackToMenu}>〈 Terug</button>
-                      <span>Goed: {score}, </span><span>Fout: {wrongAttempts}, </span><span>Score: {Math.round((score) / ((score) + wrongAttempts) * 100) | 0}%</span>
+                      <span>Goed: {score}</span><span>Fout: {wrongAttempts}</span><span>Score: {Math.round((score) / ((score) + wrongAttempts) * 100) | 0}%</span>
                     </div>
                     {feedback && <div className="feedback-message">{feedback}</div>}
                     {gameMode === 'click-country' || gameMode === 'click-capital' ? (
