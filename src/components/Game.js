@@ -2,16 +2,17 @@ import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { MapContainer, TileLayer, GeoJSON, Circle } from 'react-leaflet';
 import { feature } from 'topojson-client';
 import worldData from 'world-atlas/countries-10m.json';
+import { collection, addDoc, query, where, orderBy, limit, getDocs } from 'firebase/firestore';
+import { db } from '../firebase';
+import Highscores from './Highscores';
+import HighscoreModal from './HighscoreModal';
 import { countryData } from '../data/countries';
 import correctSound from '../assets/sounds/correct.mp3';
 import incorrectSound from '../assets/sounds/incorrect.mp3';
+import confetti from 'canvas-confetti';
 import L from 'leaflet';
 
-// Create audio elements
-const correctAudio = new Audio(correctSound);
-const incorrectAudio = new Audio(incorrectSound);
-
-// Create a custom CRS
+// Create a custom Leaflet CRS
 const CRS = L.extend({}, L.CRS.EPSG3857, {
     wrapLng: false,
     wrapLat: false
@@ -142,6 +143,11 @@ function Game() {
     const [gameMode, setGameMode] = useState(null); // 'click' or 'type'
     const [currentOptions, setCurrentOptions] = useState([]);
     const [buttonStates, setButtonStates] = useState(Array(4).fill('default'));
+    const [showHighscoreModal, setShowHighscoreModal] = useState(false);
+    const [finalScore, setFinalScore] = useState(null);
+    const [gameOver, setGameOver] = useState(false);
+    const [startTime, setStartTime] = useState(null);
+    const [endTime, setEndTime] = useState(null);
 
     // Process the GeoJSON data inside the component using useMemo
     const worldGeoJSON = useMemo(() => {
@@ -200,7 +206,7 @@ function Game() {
     };
 
     const handleCountryClick = (clickedCountryName) => {
-        if (!currentQuestion) return;
+      if (!currentQuestion || gameOver) return;
 
         const isCorrect = gameMode === 'click-country'
             ? clickedCountryName === currentQuestion.name
@@ -215,7 +221,13 @@ function Game() {
 
             if (currentQuestionIndex === questions.length - 1) {
                 // Game is finished
-                setFeedback(`Gefeliciteerd! Eindscore: ${score + 1}/${questions.length}, ${wrongAttempts} foute antwoorden`);
+                setEndTime(Date.now());
+                const finalScore = score + 1;
+                setGameOver(true);
+                const timeElapsed = Date.now() - startTime;
+                setFeedback(`Gefeliciteerd! Score: ${finalScore}/${questions.length}, Tijd: ${Math.round(timeElapsed/1000)}s`);
+                checkHighScore(finalScore, questions.length, wrongAttempts, timeElapsed);
+
             } else {
                 setFeedback('Correct!');
                 // Move to next question and force GeoJSON re-render
@@ -253,6 +265,7 @@ function Game() {
         // Shuffle all countries and create question queue
         const shuffledCountries = [...countryData]
             .sort(() => Math.random() - 0.5)
+            .slice(0, 5); // debug, remove later
 
         setQuestions(shuffledCountries);
         setCurrentQuestionIndex(0);
@@ -261,8 +274,116 @@ function Game() {
         setWrongAttempts(0);
         setGuessedCountries(new Set());
         setIncorrectGuesses(new Set());
+        setGameOver(false);
+        setStartTime(Date.now());
+        setEndTime(null);
     };
 
+    const celebrateHighScore = () => {
+        const duration = 1 * 1000;
+        const end = Date.now() + duration;
+        const colors = ['#ff0000', '#00ff00', '#0000ff', '#ffff00', '#ff00ff'];
+    
+        const defaults = {
+            zIndex: 9999,
+            colors: colors,
+            disableForReducedMotion: true
+        };
+        
+        (function frame() {
+            confetti({
+                ...defaults,
+                particleCount: 7,
+                angle: 60,
+                spread: 55,
+                origin: { x: 0, y: 0.65 },
+                colors: colors
+            });
+            confetti({
+                ...defaults,
+                particleCount: 7,
+                angle: 120,
+                spread: 55,
+                origin: { x: 1, y: 0.65 },
+                colors: colors
+            });
+    
+            if (Date.now() < end) {
+                requestAnimationFrame(frame);
+            }
+        }());
+    
+        confetti({
+            ...defaults,
+            particleCount: 50,
+            spread: 100,
+            origin: { x: 0.5, y: 0.6 },
+            colors: colors
+        });
+    };
+    
+    // Add this function to check if it's a high score
+    const checkHighScore = async (score, totalQuestions, wrongAttempts, timeElapsed) => {
+        const percentage = Math.round((score / (score + wrongAttempts)) * 100);
+
+        try {
+            const highScoresRef = collection(db, 'highscores');
+            const q = query(
+                highScoresRef, 
+                where('gameMode', '==', gameMode),
+                orderBy('score', 'desc'),
+                orderBy('timeElapsed', 'asc'),
+                limit(10)
+            );
+
+            const querySnapshot = await getDocs(q);
+            const scores = querySnapshot.docs.map(doc => doc.data());
+            
+            const isHighScore = (scores.length === 0 || (scores.length > 0 && percentage > scores[scores.length - 1].score)) ||
+                // Or if we equal the lowest score but with better time
+                (scores.length > 0 && 
+                percentage === scores[scores.length - 1].score && 
+                timeElapsed < scores[scores.length - 1].timeElapsed);
+
+            if (isHighScore) {
+              celebrateHighScore();
+            }
+            
+            if (isHighScore || scores.length < 10) {                
+                setFinalScore({
+                    score: percentage,
+                    totalQuestions,
+                    wrongAttempts,
+                    timeElapsed,
+                    correctAnswers: score
+                });
+                setTimeout(() => {
+                    setShowHighscoreModal(true);
+                }, 1000);
+            }
+        } catch (error) {
+            console.error('Error checking high scores:', error);
+        }
+    };
+    
+    const saveHighScore = async (playerName, score, totalQuestions, wrongAttempts, timeElapsed) => {
+        try {
+            const percentage = Math.round((score / (score + wrongAttempts)) * 100);
+            await addDoc(collection(db, 'highscores'), {
+                playerName,
+                score: percentage,
+                correctAnswers: score,
+                wrongAttempts,
+                totalQuestions,
+                gameMode,
+                timeElapsed,
+                date: new Date().toISOString()
+            });
+        } catch (error) {
+            console.error('Error saving score:', error);
+        }
+    };
+    
     const showHintCircle = () => {
         if (currentQuestion) {
             setShowHint(true);
@@ -316,11 +437,12 @@ function Game() {
             >
                 Vind het land bij de hoofdstad
             </button>
+            <Highscores />
         </div>
     );
     
     const getHintRadius = (coordinates) => {
-        const [lat, lon] = coordinates;
+        const lat = coordinates[0];
         // Base radius in meters
         const baseRadius = 2000000; // 2000km base radius
         
@@ -424,6 +546,8 @@ function Game() {
                                           key={index}
                                           className={`option-button ${buttonStates[index]}`}
                                           onClick={() => {
+                                              if (gameOver) return;
+
                                               const isCorrect = gameMode === 'guess-country'
                                                   ? option === currentQuestion
                                                   : option.capital === currentQuestion.capital;
@@ -439,7 +563,13 @@ function Game() {
                                                     audioManager.playSound('correct');
                                                     
                                                     if (currentQuestionIndex === questions.length - 1) {
-                                                        setFeedback(`Gefeliciteerd! Eindscore: ${score + 1}/${questions.length}, ${wrongAttempts} foute antwoorden`);
+                                                        setEndTime(Date.now());
+                                                        const finalScore = score + 1;
+                                                        setGameOver(true);
+                                                        const timeElapsed = Date.now() - startTime;
+                                                        setFeedback(`Gefeliciteerd! Score: ${finalScore}/${questions.length}, Tijd: ${Math.round(timeElapsed/1000)}s`);
+                                                        checkHighScore(finalScore, questions.length, wrongAttempts, timeElapsed);
+
                                                     } else {
                                                         setFeedback('Correct!');
                                                         setTimeout(() => {
@@ -519,6 +649,29 @@ function Game() {
                         )}
                     </MapContainer>
                 </>
+            )}
+            {showHighscoreModal && finalScore && (
+                <HighscoreModal
+                  score={finalScore.score}
+                  timeElapsed={finalScore.timeElapsed}
+                  onSubmit={async (playerName) => {
+                    await saveHighScore(
+                      playerName,
+                      finalScore.score,
+                      finalScore.totalQuestions,
+                      finalScore.wrongAttempts,
+                      finalScore.timeElapsed
+                    );
+                    setShowHighscoreModal(false);
+                    setGameStarted(false);
+                    setGameMode(null);
+                  }}
+                  onClose={() => {
+                    setShowHighscoreModal(false);
+                    setGameStarted(false);
+                    setGameMode(null);
+                  }}
+                />
             )}
         </div>
     );
