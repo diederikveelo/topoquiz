@@ -5,6 +5,13 @@ import { db } from '../firebase';
 function Highscores() {
     const [scores, setScores] = useState([]);
 
+    const formatTime = (milliseconds) => {
+        const totalSeconds = Math.round(milliseconds / 1000);
+        const minutes = Math.floor(totalSeconds / 60);
+        const seconds = totalSeconds % 60;
+        return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+    };
+    
     useEffect(() => {
         const fetchScores = async () => {
             const highScoresRef = collection(db, 'highscores');
@@ -49,7 +56,7 @@ function Highscores() {
                     <div key={score.id} className="score-item">
                         <span>{index + 1}.</span>
                         <span><b>{score.playerName}</b></span>
-                        <span>{score.score}% ({Math.round(score.timeElapsed/1000)}s)</span>
+                        <span>{score.score}% ({formatTime(score.timeElapsed)})</span>
                         <span>{getGameModeName(score.gameMode)}</span>
                     </div>
                 ))}
