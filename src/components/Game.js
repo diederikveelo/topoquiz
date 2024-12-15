@@ -265,7 +265,6 @@ function Game() {
         // Shuffle all countries and create question queue
         const shuffledCountries = [...countryData]
             .sort(() => Math.random() - 0.5)
-            .slice(0, 5); // debug, remove later
 
         setQuestions(shuffledCountries);
         setCurrentQuestionIndex(0);
