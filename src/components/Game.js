@@ -1,5 +1,5 @@
 import React, { useState, useRef, useMemo, useEffect } from 'react';
-import { MapContainer, TileLayer, GeoJSON, Circle } from 'react-leaflet';
+import { MapContainer, TileLayer, GeoJSON } from 'react-leaflet';
 import { feature } from 'topojson-client';
 import worldData from 'world-atlas/countries-10m.json';
 import { collection, addDoc, query, where, orderBy, limit, getDocs } from 'firebase/firestore';
@@ -133,7 +133,6 @@ function Game() {
     const [questions, setQuestions] = useState([]); // Array of all questions
     const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
     const [gameStarted, setGameStarted] = useState(false);
-    const [showHint, setShowHint] = useState(false);
     const [guessedCountries, setGuessedCountries] = useState(new Set());
     const [incorrectGuesses, setIncorrectGuesses] = useState(new Set());
     const [feedback, setFeedback] = useState('');
@@ -147,7 +146,8 @@ function Game() {
     const [finalScore, setFinalScore] = useState(null);
     const [gameOver, setGameOver] = useState(false);
     const [startTime, setStartTime] = useState(null);
-    const [endTime, setEndTime] = useState(null);
+    const [showCorrectCountry, setShowCorrectCountry] = useState(false);
+    const [isRevealing, setIsRevealing] = useState(false);
 
     // Process the GeoJSON data inside the component using useMemo
     const worldGeoJSON = useMemo(() => {
@@ -206,7 +206,7 @@ function Game() {
     };
 
     const handleCountryClick = (clickedCountryName) => {
-      if (!currentQuestion || gameOver) return;
+      if (!currentQuestion || gameOver || isRevealing) return;
 
         const isCorrect = gameMode === 'click-country'
             ? clickedCountryName === currentQuestion.name
@@ -217,14 +217,12 @@ function Game() {
             setScore(prevScore => prevScore + 1);
             setGuessedCountries(prev => new Set([...prev, clickedCountryName]));
             audioManager.playSound('correct');
-            setShowHint(false);
 
             if (currentQuestionIndex === questions.length - 1) {
                 // Game is finished
-                setEndTime(Date.now());
+                const timeElapsed = Date.now() - startTime;
                 const finalScore = score + 1;
                 setGameOver(true);
-                const timeElapsed = Date.now() - startTime;
                 setFeedback(`Gefeliciteerd! Score: ${finalScore}/${questions.length}, Tijd: ${Math.round(timeElapsed/1000)}s`);
                 checkHighScore(finalScore, questions.length, wrongAttempts, timeElapsed);
 
@@ -238,6 +236,7 @@ function Game() {
                 }, 2000);
             }
         } else {
+            // Wrong answer - show correct country briefly
             setWrongAttempts(prev => prev + 1);
 
             // Find the Dutch name of the clicked country
@@ -245,18 +244,29 @@ function Game() {
             const countryName = clickedCountry ? clickedCountry.dutchName : clickedCountryName;
             
             // Incorrect guess
-            setIncorrectGuesses(prev => new Set([...prev, clickedCountryName]));
             audioManager.playSound('incorrect');
-            setFeedback(`That was ${countryName}. Try again!`);
+            setFeedback(`Dat was ${countryName}. Het juiste antwoord was ${currentQuestion.dutchName}`);
+            // Set revealing state
+            setIsRevealing(true);
+            // Highlight correct country briefly
+            setShowCorrectCountry(true);
 
-            // Clear the incorrect guess after 2 seconds
             setTimeout(() => {
-                setIncorrectGuesses(prev => {
-                    const newSet = new Set(prev);
-                    newSet.delete(clickedCountryName);
-                    return newSet;
-                });
+                setShowCorrectCountry(false);
+                setIsRevealing(false);
                 setFeedback('');
+                // Move to next question
+                if (currentQuestionIndex === questions.length - 1) {
+                    // Game finished
+                    const timeElapsed = Date.now() - startTime;
+                    const finalScore = score;
+                    setGameOver(true);
+                    setFeedback(`Gefeliciteerd! Score: ${finalScore}/${questions.length}, Tijd: ${Math.round(timeElapsed/1000)}s`);
+                    checkHighScore(finalScore, questions.length, wrongAttempts, timeElapsed);
+                } else {
+                    setCurrentQuestionIndex(prev => prev + 1);
+                    setKey(prev => prev + 1);
+                }
             }, 2000);
         }
     };
@@ -275,7 +285,6 @@ function Game() {
         setIncorrectGuesses(new Set());
         setGameOver(false);
         setStartTime(Date.now());
-        setEndTime(null);
     };
 
     const celebrateHighScore = () => {
@@ -383,18 +392,6 @@ function Game() {
         }
     };
     
-    const showHintCircle = () => {
-        if (currentQuestion) {
-            setShowHint(true);
-            if (hintTimeoutRef.current) {
-                clearTimeout(hintTimeoutRef.current);
-            }
-            hintTimeoutRef.current = setTimeout(() => {
-                setShowHint(false);
-            }, 3000);
-        }
-    };
-    
     const startScreen = (
         <div className="start-screen">
             <h2>Kies jouw Game Mode</h2>
@@ -440,31 +437,6 @@ function Game() {
         </div>
     );
     
-    const getHintRadius = (coordinates) => {
-        const lat = coordinates[0];
-        // Base radius in meters
-        const baseRadius = 2000000; // 2000km base radius
-        
-        // Countries closer to poles need larger circles due to map projection
-        const latitudeFactor = Math.abs(lat) / 45 + 1; // increases radius as we move away from equator
-        
-        return baseRadius * latitudeFactor;
-    };
-    
-    const getHintLocation = (coordinates) => {
-        const [lat, lon] = coordinates;
-        
-        // Random offset between -5 and 5 degrees for both latitude and longitude
-        const latOffset = (Math.random() - 0.5) * 10;
-        const lonOffset = (Math.random() - 0.5) * 10;
-        
-        // Make sure latitude stays within valid range (-90 to 90)
-        const newLat = Math.max(-85, Math.min(85, lat + latOffset));
-        const newLon = lon + lonOffset;
-        
-        return [newLat, newLon];
-    };
-    
     const handleBackToMenu = () => {
         setGameStarted(false);
         setGameMode(null);
@@ -503,8 +475,6 @@ function Game() {
     }, [currentQuestion]);
     
     useEffect(() => {
-        // Reset hint whenever currentQuestionIndex changes
-        setShowHint(false);
         if (hintTimeoutRef.current) {
             clearTimeout(hintTimeoutRef.current);
         }
@@ -530,9 +500,6 @@ function Game() {
                                         ? currentQuestion.dutchName 
                                         : `Hoofdstad: ${currentQuestion.dutchCapital}`}
                                 </div>
-                                <button className="hint-button" onClick={showHintCircle}>
-                                    Hint
-                                </button>
                             </div>
                         )
                     ) : (
@@ -562,7 +529,6 @@ function Game() {
                                                     audioManager.playSound('correct');
                                                     
                                                     if (currentQuestionIndex === questions.length - 1) {
-                                                        setEndTime(Date.now());
                                                         const finalScore = score + 1;
                                                         setGameOver(true);
                                                         const timeElapsed = Date.now() - startTime;
@@ -625,27 +591,17 @@ function Game() {
                                 ...geoJSONStyle(feature),
                                 fillColor: (gameMode === 'guess-country' || gameMode === 'guess-capital') && 
                                           feature.properties.name === currentQuestion?.name ? 
-                                          '#FFD700' : geoJSONStyle(feature).fillColor,
-                                fillOpacity: (gameMode === 'guess-country' || gameMode === 'guess-capital') && 
+                                          '#FFD700' : 
+                                          showCorrectCountry && feature.properties.name === currentQuestion?.name ?
+                                          '#FFD700' :
+                                          geoJSONStyle(feature).fillColor,
+                                fillOpacity: ((gameMode === 'guess-country' || gameMode === 'guess-capital') || 
+                                             showCorrectCountry) && 
                                             feature.properties.name === currentQuestion?.name ? 
                                             0.6 : geoJSONStyle(feature).fillOpacity
                             })}
                             onEachFeature={gameMode.startsWith('click') ? onEachFeature : null}
                         />
-                        {showHint && currentQuestion && (
-                            <Circle
-                                center={getHintLocation(currentQuestion.coordinates)}
-                                radius={getHintRadius(currentQuestion.coordinates)}
-                                pathOptions={{
-                                    color: 'red',
-                                    fillColor: 'red',
-                                    fillOpacity: 0.1,
-                                    pointerEvents: 'none',
-                                    interactive: false
-                                }}
-                                style={{ pointerEvents: 'none' }}
-                            />
-                        )}
                     </MapContainer>
                 </>
             )}
