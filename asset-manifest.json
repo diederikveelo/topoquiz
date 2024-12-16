@@ -1,17 +1,17 @@
 {
   "files": {
     "main.css": "/topoquiz/static/css/main.59a01cf8.css",
-    "main.js": "/topoquiz/static/js/main.8b5e6700.js",
+    "main.js": "/topoquiz/static/js/main.f89ea963.js",
     "static/js/488.1a6b4c51.chunk.js": "/topoquiz/static/js/488.1a6b4c51.chunk.js",
     "static/media/correct.mp3": "/topoquiz/static/media/correct.7590b689a680bd3f54ea.mp3",
     "static/media/incorrect.mp3": "/topoquiz/static/media/incorrect.db58c5aded16d0972886.mp3",
     "index.html": "/topoquiz/index.html",
     "main.59a01cf8.css.map": "/topoquiz/static/css/main.59a01cf8.css.map",
-    "main.8b5e6700.js.map": "/topoquiz/static/js/main.8b5e6700.js.map",
+    "main.f89ea963.js.map": "/topoquiz/static/js/main.f89ea963.js.map",
     "488.1a6b4c51.chunk.js.map": "/topoquiz/static/js/488.1a6b4c51.chunk.js.map"
   },
   "entrypoints": [
     "static/css/main.59a01cf8.css",
-    "static/js/main.8b5e6700.js"
+    "static/js/main.f89ea963.js"
   ]
 }
